@@ -59,6 +59,19 @@ class Dataset(Dataset):
             "{}-duration-{}.npy".format(speaker, basename),
         )
         duration = np.load(duration_path)
+        duration = np.load(duration_path)
+        ed_path = os.path.join(
+            self.preprocessed_path,
+            "ED",
+            "{}_ED.npy".format(basename),
+        )
+        ed = np.load(ed_path)
+        worddir_path = os.path.join(
+            self.preprocessed_path,
+            "ED",
+            "{}_worddir.npy".format(basename),
+        )
+        worddir = np.load(worddir_path, allow_pickle=True).item()
 
         sample = {
             "id": basename,
@@ -69,6 +82,8 @@ class Dataset(Dataset):
             "pitch": pitch,
             "energy": energy,
             "duration": duration,
+            "ed": ed.T,
+            "worddir": worddir,
         }
 
         return sample
@@ -98,6 +113,7 @@ class Dataset(Dataset):
         pitches = [data[idx]["pitch"] for idx in idxs]
         energies = [data[idx]["energy"] for idx in idxs]
         durations = [data[idx]["duration"] for idx in idxs]
+        eds = [data[idx]["ed"] for idx in idxs]
 
         text_lens = np.array([text.shape[0] for text in texts])
         mel_lens = np.array([mel.shape[0] for mel in mels])
@@ -108,6 +124,7 @@ class Dataset(Dataset):
         pitches = pad_1D(pitches)
         energies = pad_1D(energies)
         durations = pad_1D(durations)
+        eds = pad_2D(eds)
 
         return (
             ids,
@@ -122,6 +139,7 @@ class Dataset(Dataset):
             pitches,
             energies,
             durations,
+            eds,
         )
 
     def collate_fn(self, data):
@@ -143,6 +161,7 @@ class Dataset(Dataset):
         for idx in idx_arr:
             output.append(self.reprocess(data, idx))
 
+        self.output = output
         return output
 
 

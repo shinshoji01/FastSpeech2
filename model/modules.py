@@ -71,10 +71,10 @@ class VarianceAdaptor(nn.Module):
             )
 
         self.pitch_embedding = nn.Embedding(
-            n_bins, model_config["transformer"]["encoder_hidden"]
+            n_bins, model_config["transformer"]["decoder_hidden"]
         )
         self.energy_embedding = nn.Embedding(
-            n_bins, model_config["transformer"]["encoder_hidden"]
+            n_bins, model_config["transformer"]["decoder_hidden"]
         )
 
     def get_pitch_embedding(self, x, target, mask, control):
@@ -200,7 +200,7 @@ class VariancePredictor(nn.Module):
     def __init__(self, model_config):
         super(VariancePredictor, self).__init__()
 
-        self.input_size = model_config["transformer"]["encoder_hidden"]
+        self.input_size = model_config["transformer"]["decoder_hidden"]
         self.filter_size = model_config["variance_predictor"]["filter_size"]
         self.kernel = model_config["variance_predictor"]["kernel_size"]
         self.conv_output_size = model_config["variance_predictor"]["filter_size"]

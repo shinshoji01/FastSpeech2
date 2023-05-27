@@ -81,6 +81,9 @@ class Preprocessor:
                     else:
                         info, pitch, energy, n = ret
                     out.append(info)
+                else:
+                    print(tg_path)
+                    continue
 
                 if len(pitch) > 0:
                     pitch_scaler.partial_fit(pitch.reshape((-1, 1)))
@@ -144,11 +147,15 @@ class Preprocessor:
 
         # Write metadata
         with open(os.path.join(self.out_dir, "train.txt"), "w", encoding="utf-8") as f:
-            for m in out[self.val_size :]:
-                f.write(m + "\n")
+            # for m in out[self.val_size :]:
+            for m in out:
+                if "train" in m.split("|")[0]:
+                    f.write(m + "\n")
         with open(os.path.join(self.out_dir, "val.txt"), "w", encoding="utf-8") as f:
-            for m in out[: self.val_size]:
-                f.write(m + "\n")
+            # for m in out[: self.val_size]:
+            for m in out:
+                if "test" in m.split("|")[0]:
+                    f.write(m + "\n")
 
         return out
 
@@ -169,7 +176,7 @@ class Preprocessor:
             return None
 
         # Read and trim wav files
-        wav, _ = librosa.load(wav_path)
+        wav, _ = librosa.load(wav_path, self.sampling_rate)
         wav = wav[
             int(self.sampling_rate * start) : int(self.sampling_rate * end)
         ].astype(np.float32)
@@ -262,20 +269,21 @@ class Preprocessor:
             s, e, p = t.start_time, t.end_time, t.text
 
             # Trim leading silences
-            if phones == []:
-                if p in sil_phones:
-                    continue
-                else:
-                    start_time = s
+#             if phones == []:
+#                 if p in sil_phones:
+#                     continue
+#                 else:
+#                     start_time = s
 
-            if p not in sil_phones:
-                # For ordinary phones
-                phones.append(p)
-                end_time = e
-                end_idx = len(phones)
-            else:
-                # For silent phones
-                phones.append(p)
+#             if p not in sil_phones:
+#                 # For ordinary phones
+#                 phones.append(p)
+#                 end_time = e
+#                 end_idx = len(phones)
+#             else:
+#                 # For silent phones
+#                 phones.append(p)
+            phones.append(p)
 
             durations.append(
                 int(
@@ -284,6 +292,8 @@ class Preprocessor:
                 )
             )
 
+        end_idx = len(phones)
+        end_time = e
         # Trim tailing silences
         phones = phones[:end_idx]
         durations = durations[:end_idx]

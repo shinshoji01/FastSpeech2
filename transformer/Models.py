@@ -38,14 +38,14 @@ class Encoder(nn.Module):
 
         n_position = config["max_seq_len"] + 1
         n_src_vocab = len(symbols) + 1
-        d_word_vec = config["transformer"]["encoder_hidden"]
+        d_word_vec = config["transformer"]["encoder_hidden"] 
         n_layers = config["transformer"]["encoder_layer"]
         n_head = config["transformer"]["encoder_head"]
         d_k = d_v = (
-            config["transformer"]["encoder_hidden"]
+            config["transformer"]["encoder_hidden"] 
             // config["transformer"]["encoder_head"]
         )
-        d_model = config["transformer"]["encoder_hidden"]
+        d_model = config["transformer"]["encoder_hidden"] 
         d_inner = config["transformer"]["conv_filter_size"]
         kernel_size = config["transformer"]["conv_kernel_size"]
         dropout = config["transformer"]["encoder_dropout"]

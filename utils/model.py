@@ -7,7 +7,6 @@ import numpy as np
 import hifigan
 from model import FastSpeech2, ScheduledOptim
 
-
 def get_model(args, configs, device, train=False):
     (preprocess_config, model_config, train_config) = configs
 
@@ -55,14 +54,16 @@ def get_vocoder(config, device):
         vocoder.mel2wav.eval()
         vocoder.mel2wav.to(device)
     elif name == "HiFi-GAN":
-        with open("hifigan/config.json", "r") as f:
-            config = json.load(f)
-        config = hifigan.AttrDict(config)
-        vocoder = hifigan.Generator(config)
+        with open(config["vocoder"]["hifigan_config"], "r") as f:
+            config_hifigan = json.load(f)
+        config_hifigan = hifigan.AttrDict(config_hifigan)
+        vocoder = hifigan.Generator(config_hifigan)
         if speaker == "LJSpeech":
             ckpt = torch.load("hifigan/generator_LJSpeech.pth.tar")
         elif speaker == "universal":
             ckpt = torch.load("hifigan/generator_universal.pth.tar")
+        elif speaker == "0001": # 
+            ckpt = torch.load(config["vocoder"]["hifigan_pretrained_model"])
         vocoder.load_state_dict(ckpt["generator"])
         vocoder.eval()
         vocoder.remove_weight_norm()
