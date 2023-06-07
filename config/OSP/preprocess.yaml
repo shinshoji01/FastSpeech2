@@ -1,10 +1,10 @@
 dataset: "LJSpeech"
 
 path:
-  corpus_path: "/work/Dataset/Blizzard2013"
+  corpus_path: "/work/sho/Dataset/ESD"
   lexicon_path: "/work/Git/FastSpeech2/lexicon/librispeech-lexicon.txt"
-  raw_path: "/work/Git/cuhksz-phd/notebooks/Blizzard_MFA/prosodylab_corpus_directory"
-  preprocessed_path: "/work/Git/FastSpeech2/preprocessed_data/Blizzard_nosilence"
+  raw_path: "/work/Git/cuhksz-phd/notebooks/ESD_MFA/FS_prosodylab_corpus_directory"
+  preprocessed_path: "/work/Git/FastSpeech2/preprocessed_data/OSP"
 
 preprocessing:
   val_size: 512

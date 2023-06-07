@@ -10,6 +10,11 @@ from transformer import Encoder, Decoder, PostNet
 from .modules import VarianceAdaptor
 from utils.tools import get_mask_from_lengths
 
+import sys
+sys.path.append("/work/Git/GST-Tacotron/")
+
+from GST import GST
+
 
 class FastSpeech2(nn.Module):
     """ FastSpeech2 """
@@ -40,20 +45,27 @@ class FastSpeech2(nn.Module):
                 n_speaker,
                 model_config["transformer"]["encoder_hidden"],
             )
+        # Emotion Distribution
         self.include_ed = model_config["ed"]["include_ed"]
         self.ed_combination = model_config["ed"]["combination"]
         self.ed_bool_list = np.array(model_config["ed"]["phonemes_words_utterance"]).repeat(4)
         if self.include_ed:
             if self.ed_combination=="addition":
-                # self.ed_embedding = nn.Sequential(nn.Linear(self.ed_bool_list.sum(), model_config["transformer"]["encoder_hidden"]),
-                #                                  nn.Tanh())
-                self.ed_embedding = nn.Linear(self.ed_bool_list.sum(), model_config["transformer"]["encoder_hidden"])
+                self.ed_embedding = nn.Sequential(nn.Linear(self.ed_bool_list.sum(), model_config["transformer"]["encoder_hidden"]), nn.Tanh())
+                # self.ed_embedding = nn.Linear(self.ed_bool_list.sum(), model_config["transformer"]["encoder_hidden"])
             elif self.ed_combination=="concat_embedding":
-                self.ed_embedding = nn.Sequential(nn.Linear(self.ed_bool_list.sum(), model_config["ed"]["concatenation_embedding_size"]),
-                                                 nn.Tanh())
+                self.ed_embedding = nn.Sequential(nn.Linear(self.ed_bool_list.sum(), model_config["ed"]["concatenation_embedding_size"]), nn.Tanh())
+            elif self.ed_combination=="concatenation":
                 pass
             else:
                 assert False, "'combination' in model_config should be either 'concatenation' or 'addition'"
+                
+        # Global Style Token
+        self.include_gst = model_config["gst"]["include_gst"]
+        if self.include_gst:
+            self.gst = GST()
+                
+                
 
     def forward(
         self,
@@ -71,6 +83,7 @@ class FastSpeech2(nn.Module):
         p_control=1.0,
         e_control=1.0,
         d_control=1.0,
+        inference=False,
     ):
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
         mel_masks = (
@@ -81,6 +94,11 @@ class FastSpeech2(nn.Module):
 
         output = self.encoder(texts, src_masks)
         
+        if self.speaker_emb is not None:
+            output = output + self.speaker_emb(speakers).unsqueeze(1).expand(
+                -1, max_src_len, -1
+            )
+        
         if self.include_ed:
             if self.ed_combination=="concatenation":
                 output = torch.cat([output, eds], axis=2)
@@ -90,11 +108,11 @@ class FastSpeech2(nn.Module):
                 output = output + self.ed_embedding(eds)
             else:
                 assert False, "'combination' in model_config should be either 'concatenation' or 'addition'"
-
-        if self.speaker_emb is not None:
-            output = output + self.speaker_emb(speakers).unsqueeze(1).expand(
-                -1, max_src_len, -1
-            )
+        
+        if self.include_gst:
+            style_embed = self.gst(mels)
+            style_embed = style_embed.expand_as(output)
+            output = output + style_embed
 
         (
             output,

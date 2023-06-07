@@ -64,9 +64,12 @@ class Preprocessor:
 
         # Compute pitch, energy, duration, and mel-spectrogram
         speakers = {}
-        for i, speaker in enumerate(tqdm(os.listdir(self.in_dir))):
+        # for i, speaker in enumerate(tqdm(os.listdir(self.in_dir))):
+        for i, speaker in enumerate(os.listdir(self.in_dir)):
             speakers[speaker] = i
-            for wav_name in os.listdir(os.path.join(self.in_dir, speaker)):
+            p_list = os.listdir(os.path.join(self.in_dir, speaker))
+            # for wav_name in p_list:
+            for w, wav_name in enumerate(tqdm(p_list)):
                 if ".wav" not in wav_name:
                     continue
 
@@ -82,7 +85,8 @@ class Preprocessor:
                         info, pitch, energy, n = ret
                     out.append(info)
                 else:
-                    print(tg_path)
+                    if "0011_" in tg_path:
+                        print(tg_path)
                     continue
 
                 if len(pitch) > 0:
@@ -193,7 +197,7 @@ class Preprocessor:
         )
         pitch = pw.stonemask(wav.astype(np.float64), pitch, t, self.sampling_rate)
 
-        pitch = pitch[: sum(duration)]
+        # pitch = pitch[: sum(duration)]
         if np.sum(pitch != 0) <= 1:
             return None
 
@@ -265,15 +269,15 @@ class Preprocessor:
         start_time = 0
         end_time = 0
         end_idx = 0
-        for t in tier._objects:
+        for i, t in enumerate(tier._objects):
             s, e, p = t.start_time, t.end_time, t.text
-
             # Trim leading silences
-#             if phones == []:
-#                 if p in sil_phones:
-#                     continue
-#                 else:
-#                     start_time = s
+            if phones == []:
+                # if p in sil_phones:
+                #     continue
+                # else:
+                #     start_time = s
+                start_time = s
 
 #             if p not in sil_phones:
 #                 # For ordinary phones

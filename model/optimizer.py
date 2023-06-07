@@ -5,10 +5,14 @@ import numpy as np
 class ScheduledOptim:
     """ A simple wrapper class for learning rate scheduling """
 
-    def __init__(self, model, train_config, model_config, current_step):
+    def __init__(self, model, train_config, model_config, current_step, exclude_name=None, power=-0.5):
 
+        if exclude_name==None:
+            parameters = model.parameters()
+        else:
+            parameters = [p for n, p in model.named_parameters() if exclude_name not in n]
         self._optimizer = torch.optim.Adam(
-            model.parameters(),
+            parameters,
             betas=train_config["optimizer"]["betas"],
             eps=train_config["optimizer"]["eps"],
             weight_decay=train_config["optimizer"]["weight_decay"],
@@ -17,7 +21,7 @@ class ScheduledOptim:
         self.anneal_steps = train_config["optimizer"]["anneal_steps"]
         self.anneal_rate = train_config["optimizer"]["anneal_rate"]
         self.current_step = current_step
-        self.init_lr = np.power(model_config["transformer"]["encoder_hidden"], -0.5)
+        self.init_lr = np.power(model_config["transformer"]["encoder_hidden"], power)
 
     def step_and_update_lr(self):
         self._update_learning_rate()

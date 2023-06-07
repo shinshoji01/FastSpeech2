@@ -89,8 +89,9 @@ class Dataset(Dataset):
         return sample
 
     def process_meta(self, filename):
+        path = os.path.join(self.preprocessed_path, filename) if filename in ["val.txt", "train.txt"] else filename
         with open(
-            os.path.join(self.preprocessed_path, filename), "r", encoding="utf-8"
+            path, "r", encoding="utf-8"
         ) as f:
             name = []
             speaker = []
