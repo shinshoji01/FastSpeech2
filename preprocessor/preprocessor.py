@@ -160,6 +160,11 @@ class Preprocessor:
             for m in out:
                 if "test" in m.split("|")[0]:
                     f.write(m + "\n")
+        with open(os.path.join(self.out_dir, "test.txt"), "w", encoding="utf-8") as f:
+            # for m in out[: self.val_size]:
+            for m in out:
+                if "evaluation" in m.split("|")[0]:
+                    f.write(m + "\n")
 
         return out
 

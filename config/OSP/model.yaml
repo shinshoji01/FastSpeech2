@@ -45,3 +45,5 @@ ed:
   concatenation_embedding_size: 64
 gst:
   include_gst: False
+plpm:
+  include_plpm: False

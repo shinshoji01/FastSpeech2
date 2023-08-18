@@ -1,17 +1,22 @@
 import json
 import math
 import os
-from transformers import BertTokenizer, BertForMaskedLM
 
 import numpy as np
 from torch.utils.data import Dataset
 
 from text import text_to_sequence
-from utils.tools import pad_1D, pad_2D
+from utils.tools_SER import pad_1D, pad_2D
+# from utils.tools import pad_1D, pad_2D
+
+def minmax(mel):
+    min_ = mel.min()
+    max_ = mel.max()
+    return (mel-min_)/(max_-min_)
 
 class Dataset(Dataset):
     def __init__(
-        self, filename, preprocess_config, train_config, sort=False, drop_last=False, ifbert=False
+        self, filename, preprocess_config, train_config, sort=False, drop_last=False, data_augmentation=True,
     ):
         self.dataset_name = preprocess_config["dataset"]
         self.preprocessed_path = preprocess_config["path"]["preprocessed_path"]
@@ -25,11 +30,19 @@ class Dataset(Dataset):
             self.speaker_map = json.load(f)
         self.sort = sort
         self.drop_last = drop_last
-        self.ifbert = ifbert
-        if ifbert:
-            vocab_file = "/work/Git/cuhksz-phd/notebooks/BERT_pretrained_models/tokenizer/Phoneme/vocab.txt"
-            self.tokenizer = BertTokenizer.from_pretrained(vocab_file)
-            
+        self.emo2id = {
+            "Angry": 0,
+            "Happy": 1,
+            "Sad": 2,
+            "Surprise":3,
+        }
+        self.id2emo = {
+            0: "Angry",
+            1: "Happy",
+            2: "Sad",
+            3: "Surprise",
+        }
+        self.data_augmentation = data_augmentation
 
     def __len__(self):
         return len(self.text)
@@ -39,16 +52,14 @@ class Dataset(Dataset):
         speaker = self.speaker[idx]
         speaker_id = self.speaker_map[speaker]
         raw_text = self.raw_text[idx]
-        if self.ifbert:
-            phone = np.array(self.tokenizer.encode(self.text[idx][1:-1]))
-        else:
-            phone = np.array(text_to_sequence(self.text[idx], self.cleaners))
+        phone = np.array(text_to_sequence(self.text[idx], self.cleaners))
         mel_path = os.path.join(
             self.preprocessed_path,
             "mel",
             "{}-mel-{}.npy".format(speaker, basename),
         )
         mel = np.load(mel_path)
+        mel = minmax(mel)
         pitch_path = os.path.join(
             self.preprocessed_path,
             "pitch",
@@ -68,18 +79,21 @@ class Dataset(Dataset):
         )
         duration = np.load(duration_path)
         duration = np.load(duration_path)
-        ed_path = os.path.join(
-            self.preprocessed_path,
-            "ED",
-            "{}_ED.npy".format(basename),
-        )
-        ed = np.load(ed_path)
-        worddir_path = os.path.join(
-            self.preprocessed_path,
-            "ED",
-            "{}_worddir.npy".format(basename),
-        )
-        worddir = np.load(worddir_path, allow_pickle=True).item()
+        # ed_path = os.path.join(
+        #     self.preprocessed_path,
+        #     "ED",
+        #     "{}_ED.npy".format(basename),
+        # )
+        # ed = np.load(ed_path)
+        ed = None
+        # worddir_path = os.path.join(
+        #     self.preprocessed_path,
+        #     "ED",
+        #     "{}_worddir.npy".format(basename),
+        # )
+        # worddir = np.load(worddir_path, allow_pickle=True).item()
+        worddir = None
+        emotion = basename.split("_")[2]
 
         sample = {
             "id": basename,
@@ -90,8 +104,10 @@ class Dataset(Dataset):
             "pitch": pitch,
             "energy": energy,
             "duration": duration,
-            "ed": ed.T,
+            # "ed": ed.T,
+            "ed": None,
             "worddir": worddir,
+            "emotion": self.emo2id[emotion],
         }
 
         return sample
@@ -122,25 +138,31 @@ class Dataset(Dataset):
         pitches = [data[idx]["pitch"] for idx in idxs]
         energies = [data[idx]["energy"] for idx in idxs]
         durations = [data[idx]["duration"] for idx in idxs]
-        eds = [data[idx]["ed"] for idx in idxs]
+        # eds = [data[idx]["ed"] for idx in idxs]
+        eds = None
+        emotions = [data[idx]["emotion"] for idx in idxs]
 
         text_lens = np.array([text.shape[0] for text in texts])
         mel_lens = np.array([mel.shape[0] for mel in mels])
 
         speakers = np.array(speakers)
+        emotions = np.array(emotions)
         texts = pad_1D(texts)
-        mels = pad_2D(mels)
+        if self.data_augmentation:
+            mels = pad_2D(mels, 300, 1.0, 1.0)
+        else:
+            mels = pad_2D(mels, 300, 0, 0)
         pitches = pad_1D(pitches)
         energies = pad_1D(energies)
         durations = pad_1D(durations)
-        eds = pad_2D(eds)
+        # eds = pad_2D(eds)
 
         return (
             ids,
             raw_texts,
             speakers,
             texts,
-            text_lens,
+            emotions, # previously text_lens
             max(text_lens),
             mels,
             mel_lens,
@@ -172,6 +194,7 @@ class Dataset(Dataset):
 
         self.output = output
         return output
+
 
 class TextDataset(Dataset):
     def __init__(self, filepath, preprocess_config):

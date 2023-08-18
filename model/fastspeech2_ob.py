@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+from transformers import BertForMaskedLM, BertConfig
 from transformer import Encoder, Decoder, PostNet
 from .modules import VarianceAdaptor
 from utils.tools import get_mask_from_lengths
@@ -25,8 +26,20 @@ class FastSpeech2(nn.Module):
     def __init__(self, preprocess_config, model_config):
         super(FastSpeech2, self).__init__()
         self.model_config = model_config
-
-        self.encoder = Encoder(model_config)
+        self.ifbert = model_config["transformer"]["encoder_architecture"]=="BERT"
+        
+        if self.ifbert:
+            config = BertConfig(
+                vocab_size=101,  
+                hidden_size=256,  
+                num_hidden_layers=4,
+                num_attention_heads=2, 
+                max_position_embeddings=512,  
+            )
+            pretrained_path = model_config["transformer"]["BERT_pretrained"]
+            self.encoder = BertForMaskedLM.from_pretrained(pretrained_path)
+        else:
+            self.encoder = Encoder(model_config)
         self.variance_adaptor = VarianceAdaptor(preprocess_config, model_config)
         self.decoder = Decoder(model_config)
         self.mel_linear = nn.Linear(
@@ -48,47 +61,13 @@ class FastSpeech2(nn.Module):
                 n_speaker,
                 model_config["transformer"]["encoder_hidden"],
             )
-        # Emotion Distribution
-        self.include_ed = model_config["ed"]["include_ed"]
-        self.ed_combination = model_config["ed"]["combination"]
-        self.ed_bool_list = np.array(model_config["ed"]["phonemes_words_utterance"]).repeat(4)
-        if self.include_ed:
-            if self.ed_combination=="addition":
-                self.ed_embedding = nn.Sequential(nn.Linear(self.ed_bool_list.sum(), model_config["transformer"]["encoder_hidden"]), nn.Tanh())
-                # self.ed_embedding = nn.Linear(self.ed_bool_list.sum(), model_config["transformer"]["encoder_hidden"])
-            elif self.ed_combination=="concat_embedding":
-                self.ed_embedding = nn.Sequential(nn.Linear(self.ed_bool_list.sum(), model_config["ed"]["concatenation_embedding_size"]), nn.Tanh())
-            elif self.ed_combination=="concatenation":
-                pass
-            else:
-                assert False, "'combination' in model_config should be either 'concatenation' or 'addition'"
-                
-        # Global Style Token
-        self.include_gst = model_config["gst"]["include_gst"]
-        if self.include_gst:
-            self.gst = GST()
             
-        # Phoneme-level Prosody Modeling
-        self.include_plpm = model_config["plpm"]["include_plpm"]
-        if self.include_plpm:
-            encoder_hidden = model_config["transformer"]["encoder_hidden"]
-            mel_hidden = model_config["plpm"]["mel_hidden"]
-            self.prosody_extractor = ProsodyExtractor(
-                n_mel_channels=preprocess_config["preprocessing"]["mel"]["n_mel_channels"],
-                d_model=mel_hidden,
-                kernel_size=9,
+        if self.ifbert:
+            self.bert_linear = nn.Sequential(
+                nn.Linear(512, model_config["transformer"]["encoder_hidden"]),
+                # nn.Linear(768, model_config["transformer"]["encoder_hidden"]),
+                nn.Tanh(),
             )
-            # self.prosody_predictor = ProsodyPredictor(
-            # d_model=encoder_hidden,
-            # kernel_size=[9,5],
-            # num_gaussians=model_config["plpm"]["num_gaussians"],
-            # dropout=0.2,
-            # )
-            self.prosody_linear = torch.nn.Linear(2 * mel_hidden, encoder_hidden)
-            # self.w = None
-            # self.sigma = None
-            # self.mu = None
-            self.prosody_embeddings = None
     
     def gaussian_probability(self, sigma, mu, target, mask=None, eps=1e-8):
         """
@@ -145,55 +124,39 @@ class FastSpeech2(nn.Module):
         training=True,
         inf=False,
     ):
+        if self.ifbert:
+            src_lens = src_lens - 2
+            max_src_len = max_src_len - 2
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
         mel_masks = (
             get_mask_from_lengths(mel_lens, max_mel_len)
             if mel_lens is not None
             else None
         )
-
-        output = self.encoder(texts, src_masks)
+        if self.ifbert:
+            data = {
+                "input_ids": texts,
+                "attention_mask": torch.tensor(texts>0, dtype=int),
+                "token_type_ids": None,
+                "position_ids": None,
+                "head_mask": None,
+                "inputs_embeds": None,
+                "encoder_hidden_states": None,
+                "encoder_attention_mask": None,
+                "output_attentions": None,
+                "output_hidden_states": None,
+                "return_dict": True,
+            }
+            output = self.encoder.bert(**data)
+            output = output[0][:, 1:-1, :]
+            output = self.bert_linear(output)
+        else:
+            output = self.encoder(texts, src_masks)
         
         if self.speaker_emb is not None:
             output = output + self.speaker_emb(speakers).unsqueeze(1).expand(
                 -1, max_src_len, -1
             )
-        
-        if self.include_ed:
-            if self.ed_combination=="concatenation":
-                output = torch.cat([output, eds], axis=2)
-            elif self.ed_combination=="concat_embedding":
-                output = torch.cat([output, self.ed_embedding(eds)], axis=2)
-            elif self.ed_combination=="addition":
-                output = output + self.ed_embedding(eds)
-            else:
-                assert False, "'combination' in model_config should be either 'concatenation' or 'addition'"
-        
-        if self.include_gst:
-            style_embed = self.gst(mels)
-            style_embed = style_embed.expand_as(output)
-            output = output + style_embed
-            
-        if self.include_plpm:
-            ml = mel_lens if mel_lens is not None else inf_mlens
-            dt = d_targets if mel_lens is not None else inf_dts
-            src_masks_plpm = get_mask_from_lengths_plpm(src_lens)
-            src_masks_plpm = (1-src_masks_plpm.type(torch.int)).type(torch.bool)
-            # w, sigma, mu = self.prosody_predictor(output, src_masks_plpm)
-            # if inf:
-            #     prosody_embeddings = self.prosody_predictor.sample(w, sigma, mu)
-            # else:
-            #     prosody_embeddings = self.prosody_extractor(mels, ml, dt, src_lens)
-                # mdn_loss = self.compute_mdn_loss(w, sigma, mu, prosody_embeddings.detach(), src_masks_plpm)
-            prosody_embeddings = self.prosody_extractor(mels, ml, dt, src_lens)
-            output = output + self.prosody_linear(prosody_embeddings)
-            # print(output.shape)
-            # print(output)
-            # print(output.shape)
-            # print(src_masks_plpm.shape)
-            # print(mel_lens)
-            # print(mel_masks)
-            # print(d_targets)
 
         (
             output,

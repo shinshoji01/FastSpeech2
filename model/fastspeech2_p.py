@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import math
 
 from transformer import Encoder, Decoder, PostNet
-from .modules import VarianceAdaptor
+from .modules_p import VarianceAdaptor
 from utils.tools import get_mask_from_lengths
 
 import sys
@@ -78,51 +78,7 @@ class FastSpeech2(nn.Module):
                 d_model=mel_hidden,
                 kernel_size=9,
             )
-            # self.prosody_predictor = ProsodyPredictor(
-            # d_model=encoder_hidden,
-            # kernel_size=[9,5],
-            # num_gaussians=model_config["plpm"]["num_gaussians"],
-            # dropout=0.2,
-            # )
-            self.prosody_linear = torch.nn.Linear(2 * mel_hidden, encoder_hidden)
-            # self.w = None
-            # self.sigma = None
-            # self.mu = None
-            self.prosody_embeddings = None
     
-    def gaussian_probability(self, sigma, mu, target, mask=None, eps=1e-8):
-        """
-            sigma -- [B, src_len, num_gaussians, out_features]
-            mu -- [B, src_len, num_gaussians, out_features]
-            target -- [B, src_len, out_features]
-            mask -- [B, src_len]
-
-            prob -- [B, src_len, num_gaussians, out_features]
-        """
-        target = target.unsqueeze(2).expand_as(sigma)
-        prob = (1.0 / math.sqrt(2 * math.pi)) * torch.exp(-0.5 * ((target - mu) / sigma) ** 2) / (sigma)
-        if mask is not None:
-            prob = prob.masked_fill(mask.unsqueeze(-1).unsqueeze(-1), 0)
-        return prob
-                
-    def compute_mdn_loss(self, w, sigma, mu, target, mask=None, eps=1e-8):
-        """
-        w -- [B, src_len, num_gaussians]
-        sigma -- [B, src_len, num_gaussians, out_features]
-        mu -- [B, src_len, num_gaussians, out_features]
-        target -- [B, src_len, out_features]
-        mask -- [B, src_len]
-        """
-        prob = w.unsqueeze(-1) * self.gaussian_probability(sigma, mu, target, mask)
-        # print(torch.log(torch.sum(prob, dim=2)))
-        # nll = -torch.log(torch.sum(prob+eps, dim=2) + eps)
-        nll = -torch.log(torch.sum(prob, dim=2) + eps)
-        if mask is not None:
-            nll = nll.masked_fill(mask.unsqueeze(-1), 0)
-        l_pp = torch.sum(nll, dim=1)
-        return torch.mean(l_pp)
-                
-
     def forward(
         self,
         speakers,
@@ -139,11 +95,7 @@ class FastSpeech2(nn.Module):
         p_control=1.0,
         e_control=1.0,
         d_control=1.0,
-        inf_dts=None,
-        inf_mlens=None,
-        mdn_loss=0,
-        training=True,
-        inf=False,
+        word_indices=None,
     ):
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
         mel_masks = (
@@ -159,44 +111,9 @@ class FastSpeech2(nn.Module):
                 -1, max_src_len, -1
             )
         
-        if self.include_ed:
-            if self.ed_combination=="concatenation":
-                output = torch.cat([output, eds], axis=2)
-            elif self.ed_combination=="concat_embedding":
-                output = torch.cat([output, self.ed_embedding(eds)], axis=2)
-            elif self.ed_combination=="addition":
-                output = output + self.ed_embedding(eds)
-            else:
-                assert False, "'combination' in model_config should be either 'concatenation' or 'addition'"
-        
-        if self.include_gst:
-            style_embed = self.gst(mels)
-            style_embed = style_embed.expand_as(output)
-            output = output + style_embed
-            
-        if self.include_plpm:
-            ml = mel_lens if mel_lens is not None else inf_mlens
-            dt = d_targets if mel_lens is not None else inf_dts
-            src_masks_plpm = get_mask_from_lengths_plpm(src_lens)
-            src_masks_plpm = (1-src_masks_plpm.type(torch.int)).type(torch.bool)
-            # w, sigma, mu = self.prosody_predictor(output, src_masks_plpm)
-            # if inf:
-            #     prosody_embeddings = self.prosody_predictor.sample(w, sigma, mu)
-            # else:
-            #     prosody_embeddings = self.prosody_extractor(mels, ml, dt, src_lens)
-                # mdn_loss = self.compute_mdn_loss(w, sigma, mu, prosody_embeddings.detach(), src_masks_plpm)
-            prosody_embeddings = self.prosody_extractor(mels, ml, dt, src_lens)
-            output = output + self.prosody_linear(prosody_embeddings)
-            # print(output.shape)
-            # print(output)
-            # print(output.shape)
-            # print(src_masks_plpm.shape)
-            # print(mel_lens)
-            # print(mel_masks)
-            # print(d_targets)
-
         (
             output,
+            ed_predictions,
             p_predictions,
             e_predictions,
             log_d_predictions,
@@ -208,12 +125,14 @@ class FastSpeech2(nn.Module):
             src_masks,
             mel_masks,
             max_mel_len,
+            eds,
             p_targets,
             e_targets,
             d_targets,
             p_control,
             e_control,
             d_control,
+            word_indices,
         )
         # print(mel_masks)
 
@@ -225,6 +144,7 @@ class FastSpeech2(nn.Module):
         return (
             output,
             postnet_output,
+            ed_predictions,
             p_predictions,
             e_predictions,
             log_d_predictions,

@@ -9,6 +9,8 @@ transformer:
   conv_kernel_size: [9, 1]
   encoder_dropout: 0.2
   decoder_dropout: 0.2
+  encoder_architecture: "FastSpeech2" # "FastSpeech2" or "BERT"
+  BERT_pretrained: "/work/Git/cuhksz-phd/notebooks/BERT_pretrained_models/BERT/Base/checkpoint-500000/"
 
 variance_predictor:
   filter_size: 256
@@ -18,7 +20,11 @@ variance_predictor:
 variance_embedding:
   pitch_quantization: "linear" # support 'linear' or 'log', 'log' is allowed only if the pitch values are not normalized during preprocessing
   energy_quantization: "linear" # support 'linear' or 'log', 'log' is allowed only if the energy values are not normalized during preprocessing
+  ed_quantization: "linear" # support 'linear' or 'log', 'log' is allowed only if the energy values are not normalized during preprocessing
+  ed_min: 0
+  ed_max: 1.0
   n_bins: 256
+  prosody_order: ["ed", "duration", "pitch", "energy"]
 
 # gst:
 #   use_gst: False
@@ -45,3 +51,7 @@ ed:
   concatenation_embedding_size: 64
 gst:
   include_gst: False
+plpm:
+  include_plpm: False
+  num_gaussians: 100
+  mel_hidden: 256

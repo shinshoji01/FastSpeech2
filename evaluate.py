@@ -43,7 +43,7 @@ def evaluate(model, step, configs, logger=None, vocoder=None):
                 output = model(*(batch[2:]))
 
                 # Cal Loss
-                losses = Loss(batch[:-1], output)
+                losses = Loss(batch[:-1], output[:-1])
 
                 for i in range(len(losses)):
                     loss_sums[i] += losses[i].item() * len(batch[0])

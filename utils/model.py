@@ -7,6 +7,27 @@ import numpy as np
 import hifigan
 from model import FastSpeech2, ScheduledOptim
 
+def get_model_PLPM(args, configs, device, train=False, power=-0.5):
+    (preprocess_config, model_config, train_config) = configs
+
+    base_model = FastSpeech2(preprocess_config, model_config).to(device)
+    del base_model.prosody_predictor
+    model = FastSpeech2(preprocess_config, model_config).to(device)
+    if args.restore_step:
+        ckpt_path = os.path.join(
+            train_config["path"]["ckpt_path"],
+            "{}.pth.tar".format(args.restore_step),
+        )
+        ckpt = torch.load(ckpt_path)
+        base_model.load_state_dict(ckpt["model"], strict=False)
+        print("load")
+        model.load_state_dict(base_model.state_dict(), strict=False)
+
+    scheduled_optim = ScheduledOptim(model, train_config, model_config, args.restore_step, "speaker_emb", power=power)
+    model.train()
+    return model, scheduled_optim
+    # return base_model, scheduled_optim
+
 def get_model(args, configs, device, train=False, power=-0.5):
     (preprocess_config, model_config, train_config) = configs
     finetune = train_config["finetune"]["finetune"]
