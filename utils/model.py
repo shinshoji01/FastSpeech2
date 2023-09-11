@@ -28,7 +28,7 @@ def get_model_PLPM(args, configs, device, train=False, power=-0.5):
     return model, scheduled_optim
     # return base_model, scheduled_optim
 
-def get_model(args, configs, device, train=False, power=-0.5):
+def get_model(args, configs, device, train=False, power=-0.5, ckpt_check=True):
     (preprocess_config, model_config, train_config) = configs
     finetune = train_config["finetune"]["finetune"]
     multi_speaker = model_config["multi_speaker"]
@@ -46,10 +46,13 @@ def get_model(args, configs, device, train=False, power=-0.5):
         elif finetune:
             ckpt_path = train_config["finetune"]["pretrained_path"]
             ckpt = torch.load(ckpt_path)
-            try:
+            if ckpt_check:
                 model.load_state_dict(ckpt["model"])
-            except RuntimeError:
-                model.load_state_dict(ckpt["model"], strict=False)
+            else:
+                try:
+                    model.load_state_dict(ckpt["model"])
+                except RuntimeError:
+                    model.load_state_dict(ckpt["model"], strict=False)
 
     if train:
         scheduled_optim = ScheduledOptim(model, train_config, model_config, args.restore_step, "speaker_emb", power=power)
