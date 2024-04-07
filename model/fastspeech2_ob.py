@@ -64,6 +64,7 @@ class FastSpeech2BERT(nn.Module):
                                   logits=prediction_scores,
                                   hidden_states=outputs)
 
+        
 class FastSpeech2(nn.Module):
     """ FastSpeech2 """
 
@@ -90,6 +91,7 @@ class FastSpeech2(nn.Module):
                 self.encoder = BertForMaskedLM.from_pretrained(pretrained_path)
         else:
             self.encoder = Encoder(model_config)
+            
         self.variance_adaptor = VarianceAdaptor(preprocess_config, model_config)
         self.decoder = Decoder(model_config)
         self.mel_linear = nn.Linear(
@@ -122,39 +124,6 @@ class FastSpeech2(nn.Module):
                 nn.Tanh(),
             )
     
-    def gaussian_probability(self, sigma, mu, target, mask=None, eps=1e-8):
-        """
-            sigma -- [B, src_len, num_gaussians, out_features]
-            mu -- [B, src_len, num_gaussians, out_features]
-            target -- [B, src_len, out_features]
-            mask -- [B, src_len]
-
-            prob -- [B, src_len, num_gaussians, out_features]
-        """
-        target = target.unsqueeze(2).expand_as(sigma)
-        prob = (1.0 / math.sqrt(2 * math.pi)) * torch.exp(-0.5 * ((target - mu) / sigma) ** 2) / (sigma)
-        if mask is not None:
-            prob = prob.masked_fill(mask.unsqueeze(-1).unsqueeze(-1), 0)
-        return prob
-                
-    def compute_mdn_loss(self, w, sigma, mu, target, mask=None, eps=1e-8):
-        """
-        w -- [B, src_len, num_gaussians]
-        sigma -- [B, src_len, num_gaussians, out_features]
-        mu -- [B, src_len, num_gaussians, out_features]
-        target -- [B, src_len, out_features]
-        mask -- [B, src_len]
-        """
-        prob = w.unsqueeze(-1) * self.gaussian_probability(sigma, mu, target, mask)
-        # print(torch.log(torch.sum(prob, dim=2)))
-        # nll = -torch.log(torch.sum(prob+eps, dim=2) + eps)
-        nll = -torch.log(torch.sum(prob, dim=2) + eps)
-        if mask is not None:
-            nll = nll.masked_fill(mask.unsqueeze(-1), 0)
-        l_pp = torch.sum(nll, dim=1)
-        return torch.mean(l_pp)
-                
-
     def forward(
         self,
         speakers,

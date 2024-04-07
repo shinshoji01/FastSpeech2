@@ -2,7 +2,8 @@ import argparse
 
 import yaml
 
-from preprocessor.preprocessor import Preprocessor
+#from preprocessor.preprocessor import Preprocessor
+from preprocessor.preprocessor_msp import Preprocessor
 
 
 if __name__ == "__main__":

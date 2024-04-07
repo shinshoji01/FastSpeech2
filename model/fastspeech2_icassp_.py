@@ -13,10 +13,10 @@ from .modules_p import VarianceAdaptor
 from utils.tools import get_mask_from_lengths
 
 import sys
-sys.path.append("../../GST-Tacotron/")
+sys.path.append("/work/Git/GST-Tacotron/")
 from GST import GST
 
-sys.path.append("../../Phone-Level-Mixture-Density-Network-for-TTS/")
+sys.path.append("/work/Git/Phone-Level-Mixture-Density-Network-for-TTS/")
 from core.gmm_mdn import ProsodyExtractor, ProsodyPredictor
 from hautils.util import get_mask_from_lengths_plpm
 from transformers.modeling_outputs import MaskedLMOutput
@@ -113,24 +113,17 @@ class FastSpeech2(nn.Module):
 
         self.speaker_emb = None
         if model_config["multi_speaker"]:
-            self.individual_embedding = preprocess_config["preprocessing"]["speaker_embedding"]["individual_embedding"]
-            if self.individual_embedding:
-                self.speaker_emb = nn.Sequential(
-                    nn.Linear(256, model_config["transformer"]["encoder_hidden"]), 
-                    nn.Tanh()
+            with open(
+                os.path.join(
+                    preprocess_config["path"]["preprocessed_path"], "speakers.json"
+                ),
+                "r",
+            ) as f:
+                n_speaker = len(json.load(f))
+            self.speaker_emb = nn.Embedding(
+                n_speaker,
+                model_config["transformer"]["encoder_hidden"],
             )
-            else:
-                with open(
-                    os.path.join(
-                        preprocess_config["path"]["preprocessed_path"], "speakers.json"
-                    ),
-                    "r",
-                ) as f:
-                    n_speaker = len(json.load(f))
-                self.speaker_emb = nn.Embedding(
-                    n_speaker,
-                    model_config["transformer"]["encoder_hidden"],
-                )
             
         if self.ifbert:
             if self.ifencoder:
@@ -144,9 +137,9 @@ class FastSpeech2(nn.Module):
             
         # Emotion Distribution
         self.include_ed = model_config["ed"]["include_ed"]
-        self.ed_placement = preprocess_config["preprocessing"]["ED"]["placement"]
+        self.ed_embedding = "variance_adaptor"
         self.ed_bool_list = np.array(model_config["ed"]["phonemes_words_utterance"]).repeat(4)
-        if self.include_ed and self.ed_placement=="external":
+        if self.include_ed:
             enc_dim = model_config["transformer"]["encoder_hidden"]
             self.ed_embedding = nn.Sequential(
                 nn.Linear(self.ed_bool_list.sum(), enc_dim), 
@@ -226,14 +219,9 @@ class FastSpeech2(nn.Module):
 
         
         if self.speaker_emb is not None:
-            if self.individual_embedding:
-                output = output + self.speaker_emb(speaker_embedding).expand(
-                    -1, max_src_len, -1
-                )
-            else:
-                output = output + self.speaker_emb(speakers).unsqueeze(1).expand(
-                    -1, max_src_len, -1
-                )
+            output = output + self.speaker_emb(speakers).unsqueeze(1).expand(
+                -1, max_src_len, -1
+            )
             
         if self.include_ed and self.ed_placement=="external":
             ed_embedding = self.ed_embedding(eds)

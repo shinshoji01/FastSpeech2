@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def to_device(data, device):
-    if len(data) == 13:
+    if len(data) == 14:
         (
             ids,
             raw_texts,
@@ -31,6 +31,7 @@ def to_device(data, device):
             energies,
             durations,
             eds,
+            els
         ) = data
 
         speakers = torch.from_numpy(speakers).long().to(device)
@@ -42,6 +43,7 @@ def to_device(data, device):
         energies = torch.from_numpy(energies).to(device)
         durations = torch.from_numpy(durations).long().to(device)
         eds = torch.from_numpy(eds).float().to(device)
+        els = torch.from_numpy(els).float().to(device)
 
         return (
             ids,
@@ -57,16 +59,18 @@ def to_device(data, device):
             energies,
             durations,
             eds,
+            els,
         )
 
-    if len(data) == 7:
+    if len(data) == 8:
         (ids, raw_texts, speakers, texts, src_lens, max_src_len) = data
 
         speakers = torch.from_numpy(speakers).long().to(device)
         texts = torch.from_numpy(texts).long().to(device)
         src_lens = torch.from_numpy(src_lens).to(device)
+        els = torch.from_numpy(els).long().to(device)
 
-        return (ids, raw_texts, speakers, texts, src_lens, max_src_len)
+        return (ids, raw_texts, speakers, texts, src_lens, max_src_len, els)
 
 
 def log(

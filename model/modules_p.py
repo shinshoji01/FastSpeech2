@@ -157,6 +157,11 @@ class VarianceAdaptor(nn.Module):
         d_control=1.0,
         word_indices=None,
     ):
+        ed_prediction = None
+        pitch_prediction = None
+        energy_prediction = None
+        log_duration_prediction = None
+        duration_rounded = None
         
         for prosody in self.prosody_order:
             if prosody=="ed":

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 class FastSpeech2Loss(nn.Module):
@@ -24,11 +25,14 @@ class FastSpeech2Loss(nn.Module):
             pitch_targets,
             energy_targets,
             duration_targets,
-            ed_targets,
-        ) = inputs[6:-1]
+            eds,
+            els,
+        ) = inputs[6:]
         (
             mel_predictions,
             postnet_mel_predictions,
+            uv_embedding,
+            uv_predictions,
             ed_embedding,
             ed_predictions,
             pitch_predictions,
@@ -40,6 +44,11 @@ class FastSpeech2Loss(nn.Module):
             _,
             _,
         ) = predictions
+        shape = eds.shape
+        els_numpy = els.detach().cpu().numpy()
+        bool_list = torch.tensor(np.eye(12)[els_numpy].astype(bool)).unsqueeze(1).repeat((1,shape[1],1))
+        new_eds = eds[bool_list].view(shape[0],shape[1],1)
+        
         src_masks = ~src_masks
         mel_masks = ~mel_masks
         log_duration_targets = torch.log(duration_targets.float() + 1)
@@ -47,19 +56,9 @@ class FastSpeech2Loss(nn.Module):
         mel_masks = mel_masks[:, :mel_masks.shape[1]]
 
         log_duration_targets.requires_grad = False
-        ed_targets.requires_grad = False
         pitch_targets.requires_grad = False
         energy_targets.requires_grad = False
         mel_targets.requires_grad = False
-        
-        # emotion distribution
-        if ed_embedding==None:
-            ed_loss = self.mse_loss(ed_targets.detach(), ed_predictions)
-        else:
-            ed_mask = src_masks.unsqueeze(-1).repeat((1,1,12))
-            ed_predictions = ed_predictions.masked_select(ed_mask)
-            ed_targets = ed_targets.masked_select(ed_mask)
-            ed_loss = self.mse_loss(ed_predictions, ed_targets) * 10
 
         if self.pitch_feature_level == "phoneme_level":
             pitch_predictions = pitch_predictions.masked_select(src_masks)
@@ -87,12 +86,15 @@ class FastSpeech2Loss(nn.Module):
         mel_loss = self.mae_loss(mel_predictions, mel_targets)
         postnet_mel_loss = self.mae_loss(postnet_mel_predictions, mel_targets)
 
+        # ed_loss = self.mse_loss(ed_embedding.detach(), ed_predictions)
+        ed_loss = self.mse_loss(new_eds.detach(), ed_predictions)
+        uv_loss = self.mse_loss(uv_embedding.detach(), uv_predictions)
         pitch_loss = self.mse_loss(pitch_predictions, pitch_targets)
         energy_loss = self.mse_loss(energy_predictions, energy_targets)
         duration_loss = self.mse_loss(log_duration_predictions, log_duration_targets)
 
         total_loss = (
-            mel_loss + postnet_mel_loss + ed_loss + duration_loss + pitch_loss + energy_loss
+            mel_loss + postnet_mel_loss + duration_loss + pitch_loss + energy_loss + ed_loss + uv_loss
         )
 
         return (
@@ -100,6 +102,7 @@ class FastSpeech2Loss(nn.Module):
             mel_loss,
             postnet_mel_loss,
             ed_loss,
+            uv_loss,
             pitch_loss,
             energy_loss,
             duration_loss,

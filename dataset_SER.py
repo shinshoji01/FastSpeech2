@@ -16,12 +16,13 @@ def minmax(mel):
 
 class Dataset(Dataset):
     def __init__(
-        self, filename, preprocess_config, train_config, sort=False, drop_last=False, data_augmentation=True,
+        self, filename, preprocess_config, train_config, sort=False, drop_last=False, data_augmentation=True, blizzard=False,
     ):
         self.dataset_name = preprocess_config["dataset"]
         self.preprocessed_path = preprocess_config["path"]["preprocessed_path"]
         self.cleaners = preprocess_config["preprocessing"]["text"]["text_cleaners"]
         self.batch_size = train_config["optimizer"]["batch_size"]
+        self.blizzard = blizzard
 
         self.basename, self.speaker, self.text, self.raw_text = self.process_meta(
             filename
@@ -35,12 +36,14 @@ class Dataset(Dataset):
             "Happy": 1,
             "Sad": 2,
             "Surprise":3,
+            "Neutral":4,
         }
         self.id2emo = {
             0: "Angry",
             1: "Happy",
             2: "Sad",
             3: "Surprise",
+            4: "Neutral",
         }
         self.data_augmentation = data_augmentation
 
@@ -93,7 +96,10 @@ class Dataset(Dataset):
         # )
         # worddir = np.load(worddir_path, allow_pickle=True).item()
         worddir = None
-        emotion = basename.split("_")[2]
+        if self.blizzard:
+            emotion = "Neutral"
+        else:
+            emotion = basename.split("_")[2]
 
         sample = {
             "id": basename,

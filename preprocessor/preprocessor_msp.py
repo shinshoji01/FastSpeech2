@@ -59,6 +59,7 @@ class Preprocessor:
 
         print("Processing Data ...")
         out = list()
+        wav_path_list = list()
         n_frames = 0
         pitch_scaler = StandardScaler()
         energy_scaler = StandardScaler()
@@ -66,7 +67,11 @@ class Preprocessor:
         # Compute pitch, energy, duration, and mel-spectrogram
         speakers = {}
         # for i, speaker in enumerate(tqdm(os.listdir(self.in_dir))):
-        for i, speaker in enumerate(os.listdir(self.in_dir)):
+        speaker_dir = os.listdir(self.in_dir)
+        speaker_dir.sort()
+        for i, speaker in enumerate(speaker_dir):
+            # speaker = "105"
+            print(f"{i+1} / {len(speaker_dir)}", speaker)
             speakers[speaker] = i
             # p_list = os.listdir(os.path.join(self.in_dir, speaker))
             p_list = glob.glob(f"{self.in_dir}/{speaker}/*/*/*.wav")
@@ -76,20 +81,28 @@ class Preprocessor:
                 if ".wav" not in wav_name:
                     continue
 
-                basename = wav_name.split(".")[0]
-                tg_path = os.path.join(
-                    self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)
-                )
+                # basename = wav_name.split(".")[0]
+                # tg_path = os.path.join(
+                #     self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)
+                # )
+                basename = os.path.basename(wav_name).split(".")[0]
+                tg_path = f"{self.out_dir}/TextGrid/{basename}.TextGrid"
+                txt_file = f"/data/MSP-Podcast/Transcripts/{basename}.txt"
+                # print(txt_file)
                 if os.path.exists(tg_path):
-                    ret = self.process_utterance(speaker, basename)
+                    try:
+                        ret = self.process_utterance(speaker, wav_name, txt_file, tg_path)
+                    except UnboundLocalError:
+                        print(tg_path)
+                        continue
                     if ret is None:
                         continue
                     else:
                         info, pitch, energy, n = ret
+                    wav_path_list.append(wav_name.split("/")[-2])
                     out.append(info)
                 else:
-                    if "0011_" in tg_path:
-                        print(tg_path)
+                    # if "0011_" in tg_path:
                     continue
 
                 if len(pitch) > 0:
@@ -98,6 +111,8 @@ class Preprocessor:
                     energy_scaler.partial_fit(energy.reshape((-1, 1)))
 
                 n_frames += n
+            # if i>-1:
+            #     break
 
         print("Computing statistic quantities ...")
         # Perform normalization if necessary
@@ -122,10 +137,12 @@ class Preprocessor:
             os.path.join(self.out_dir, "energy"), energy_mean, energy_std
         )
 
+        print("Saving speakers ...")
         # Save files
         with open(os.path.join(self.out_dir, "speakers.json"), "w") as f:
             f.write(json.dumps(speakers))
 
+        print("Saving stats ...")
         with open(os.path.join(self.out_dir, "stats.json"), "w") as f:
             stats = {
                 "pitch": [
@@ -152,31 +169,38 @@ class Preprocessor:
         random.shuffle(out)
         out = [r for r in out if r is not None]
 
+        print("Saving train.txt ...")
         # Write metadata
+        print(len(wav_path_list))
+        print(len(out))
         with open(os.path.join(self.out_dir, "train.txt"), "w", encoding="utf-8") as f:
-            # for m in out[self.val_size :]:
-            for m in out:
-                if "train" in m.split("|")[0]:
+            for j in range(len(out)):
+                m = out[j]
+                if wav_path_list[j] in ["Train"]:
                     f.write(m + "\n")
+        print("Saving val.txt ...")
         with open(os.path.join(self.out_dir, "val.txt"), "w", encoding="utf-8") as f:
-            # for m in out[: self.val_size]:
-            for m in out:
-                if "test" in m.split("|")[0]:
+            for j in range(len(out)):
+                m = out[j]
+                if wav_path_list[j] in ["Development"]:
                     f.write(m + "\n")
+        print("Saving test.txt ...")
         with open(os.path.join(self.out_dir, "test.txt"), "w", encoding="utf-8") as f:
-            # for m in out[: self.val_size]:
-            for m in out:
-                if "evaluation" in m.split("|")[0]:
+            for j in range(len(out)):
+                m = out[j]
+                if wav_path_list[j] in ["Test1", "Test2"]:
                     f.write(m + "\n")
 
         return out
 
-    def process_utterance(self, speaker, basename):
-        wav_path = os.path.join(self.in_dir, speaker, "{}.wav".format(basename))
-        text_path = os.path.join(self.in_dir, speaker, "{}.lab".format(basename))
-        tg_path = os.path.join(
-            self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)
-        )
+    # def process_utterance(self, speaker, basename):
+    def process_utterance(self, speaker, wav_path, text_path, tg_path):
+        # wav_path = os.path.join(self.in_dir, speaker, "{}.wav".format(basename))
+        # text_path = os.path.join(self.in_dir, speaker, "{}.lab".format(basename))
+        # tg_path = os.path.join(
+        #     self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)[0]
+        # )
+        basename = os.path.basename(wav_path).split(".")[0]
 
         # Get alignments
         textgrid = tgt.io.read_textgrid(tg_path)
@@ -325,12 +349,14 @@ class Preprocessor:
     def normalize(self, in_dir, mean, std):
         max_value = np.finfo(np.float64).min
         min_value = np.finfo(np.float64).max
-        for filename in os.listdir(in_dir):
+        for f, filename in enumerate(os.listdir(in_dir)):
             filename = os.path.join(in_dir, filename)
             values = (np.load(filename) - mean) / std
             np.save(filename, values)
 
             max_value = max(max_value, max(values))
             min_value = min(min_value, min(values))
+            # if f>100:
+            #     break
 
         return min_value, max_value

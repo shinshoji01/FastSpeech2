@@ -33,11 +33,11 @@ class Dataset(Dataset):
         if ifms:
             self.label_type = train_config['msemotts']["type"]
             
-        self.ed_style = preprocess_config["preprocessing"]["ED"]["style"]
-        self.ed_model_name = preprocess_config["preprocessing"]["ED"]["model_name"]
-        self.averaged_utterance = preprocess_config["preprocessing"]["ED"]["averaged_utterance"]
+        # self.ed_style = preprocess_config["preprocessing"]["ED"]["style"]
+        # self.ed_model_name = preprocess_config["preprocessing"]["ED"]["model_name"]
+        # self.averaged_utterance = preprocess_config["preprocessing"]["ED"]["averaged_utterance"]
         
-        self.speaker_embedding = preprocess_config["preprocessing"]["speaker_embedding"]["style"]
+        # self.speaker_embedding = preprocess_config["preprocessing"]["speaker_embedding"]["style"]
             
             
 
@@ -77,38 +77,24 @@ class Dataset(Dataset):
             "{}-duration-{}.npy".format(speaker, basename),
         )
         duration = np.load(duration_path)
-        if self.ed_style=="relative_attributes":
-            dir_name = "ED"
-            if self.ed_model_name=="OpenSMILE":
-                file_name = f"{basename}_ED.npy"
-            else:
-                file_name = f"{basename}_ED_{self.ed_model_name}.npy"
-        elif self.ed_style=="dnn":
-            # dir_name = "DNNED"
-            # file_name = f"{basename}_HED_{self.ed_model_name}.npy"
-            dir_name = f"dnnEDdir/{self.ed_model_name}"
-            file_name = f"{basename}_HED_{self.ed_model_name}.npy"
+        
+        dir_name = "ED"
+        file_name = f"{basename}_ED.npy"
         ed_path = os.path.join(
             self.preprocessed_path,
             dir_name,
             file_name,
         )
         ed = np.load(ed_path)
-        if self.averaged_utterance:
-            ed[8:] = np.array([ed[:4].mean(axis=1), ed[4:8].mean(axis=1)]).mean(axis=0).reshape(-1, 1)
+        # if self.averaged_utterance:
+            # ed[8:] = np.array([ed[:4].mean(axis=1), ed[4:8].mean(axis=1)]).mean(axis=0).reshape(-1, 1)
         worddir_path = os.path.join(
             self.preprocessed_path,
             "ED",
             "{}_worddir.npy".format(basename),
         )
         worddir = np.load(worddir_path, allow_pickle=True).item()
-        if self.speaker_embedding:
-            dir_name = "speaker_embedding"
-            file_name = f"{basename}_{self.speaker_embedding}.npy"
-            speaker_embedding_path = f"{self.preprocessed_path}/{dir_name}/{file_name}"
-            speaker_embedding = np.load(speaker_embedding_path)
-        else:
-            speaker_embedding = np.zeros((1, 256))
+        speaker_embedding = np.zeros((1, 256))
             
         if self.ifms:
             el_path = os.path.join(

@@ -1,10 +1,10 @@
 dataset: "LJSpeech"
 
 path:
-  corpus_path: "/data/Blizzard2013"
+  corpus_path: "/work/Dataset/Blizzard2013"
   lexicon_path: "/work/Git/FastSpeech2/lexicon/librispeech-lexicon.txt"
   raw_path: "/work/Git/cuhksz-phd/notebooks/Blizzard_MFA/prosodylab_corpus_directory"
-  preprocessed_path: "/work/Git/FastSpeech2/preprocessed_data/Blizzard_journal"
+  preprocessed_path: "/work/Git/FastSpeech2/preprocessed_data/Blizzard_sr"
 
 preprocessing:
   val_size: 512
@@ -12,7 +12,7 @@ preprocessing:
     text_cleaners: ["english_cleaners"]
     language: "en"
   audio:
-    sampling_rate: 22050
+    sampling_rate: 16000
     max_wav_value: 32768.0
   stft:
     filter_length: 1024
